@@ -1,0 +1,54 @@
+{
+  "name": "midi-canvas",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "rimraf dist && vite build --outDir dist",
+    "test": "jest"
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ttys026/midi-canvas"
+  },
+  "author": "troy.lty <a@tianyi.li> (https://github.com/ttys026/midi-canvas)",
+  "types": "dist/index.d.ts",
+  "module": "dist/index.es.js",
+  "main": "dist/index.cjs.js",
+  "engines": {
+    "node": ">=14"
+  },
+  "license": "ISC",
+  "sideEffects": false,
+  "dependencies": {
+    "midi-parser-js": "^4.0.4"
+  },
+  "devDependencies": {
+    "@babel/preset-env": "^7.22.10",
+    "@jest/globals": "^29.5.0",
+    "@rollup/plugin-babel": "^6.0.4",
+    "@testing-library/jest-dom": "^5.16.5",
+    "@testing-library/react": "^14.0.0",
+    "@types/jest": "^29.5.0",
+    "@types/node": "^18.15.11",
+    "@types/react": "^18.0.33",
+    "@types/react-dom": "^18.0.33",
+    "fake-indexeddb": "^4.0.1",
+    "fast-glob": "^3.2.12",
+    "jest": "^29.5.0",
+    "jest-canvas-mock": "^2.5.2",
+    "jest-environment-jsdom": "^29.5.0",
+    "rimraf": "^4.4.1",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.0.4",
+    "vite": "^5.1.6",
+    "vite-pages-theme-doc": "^4.0.0",
+    "vite-plugin-dts": "^2.3.0",
+    "vite-tsconfig-paths": "^4.2.0"
+  },
+  "peerDependencies": {
+    "react": "*",
+    "react-dom": "*"
+  }
+}
