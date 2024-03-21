@@ -5,14 +5,18 @@ export interface BarStyle extends CanvasShadowStyles {
   strokeStyle: string | CanvasGradient | CanvasPattern;
 }
 
+export interface MidiConfig {
+  src: string;
+  barStyle?: Partial<BarStyle>;
+  activeStyle?: Partial<BarStyle>;
+}
+
 export interface Params {
-  midi: string;
   audio: string;
   container: HTMLElement;
   width: number | string;
   height: number | string;
-  barStyle?: Partial<BarStyle>;
-  activeStyle?: Partial<BarStyle>;
+  midis: MidiConfig[];
 }
 
 const normalize = (base64: string) => {
@@ -29,21 +33,22 @@ const parse = (base64: string): MidiParseResult => {
   return raw;
 };
 
+const defaultBarStyle = { fillStyle: "#44444488", shadowBlur: 0 };
+const defaultActiveStyle = {
+  fillStyle: "#c246afc0",
+  shadowColor: "#ee11ef",
+  shadowBlur: 10,
+};
+
 export default class MidiCanvas {
   private raf = 0;
   private ready = false;
   private config: Params = {
-    midi: "",
     audio: "",
     container: document.body,
     width: 400,
     height: 200,
-    barStyle: { fillStyle: "#44444488", shadowBlur: 0 },
-    activeStyle: {
-      fillStyle: "#c246afc0",
-      shadowColor: "#ee11ef",
-      shadowBlur: 10,
-    },
+    midis: [],
   };
   public audio = new Audio();
 
@@ -56,49 +61,54 @@ export default class MidiCanvas {
   }
 
   private prepareData = () => {
-    const raw = parse(this.config.midi);
-    const longest = raw.track.reduce((acc, ele) => {
-      return acc.event.length > ele.event.length ? acc : ele;
-    }, raw.track[0]);
-
-    const events: MidiEvent[] = longest.event;
     const midiInfo = { max: -1, min: 255, avg: 0 };
-    const midiData = events
-      .reduce(
-        (acc, cur) => {
-          acc.curTime += cur.deltaTime;
-          const [note, velocity] = Array.isArray(cur.data) ? cur.data : [0, 0];
-          if (cur.type === 9 && velocity !== 0) {
-            acc.noteMap[note] = acc.curTime;
-            if (note > midiInfo.max) midiInfo.max = note;
-            if (note < midiInfo.min) midiInfo.min = note;
-          } else if (cur.type === 8 || velocity === 0) {
-            if (note in acc.noteMap && acc.noteMap[note] !== -1) {
-              acc.parsed.push({
-                note: note,
-                start: acc.noteMap[note],
-                end: acc.curTime,
-              });
+
+    const data = this.config.midis.map((midi) => {
+      const raw = parse(midi.src);
+      const longest = raw.track.reduce((acc, ele) => {
+        return acc.event.length > ele.event.length ? acc : ele;
+      }, raw.track[0]);
+
+      const events: MidiEvent[] = longest.event;
+
+      const midiData = events
+        .reduce(
+          (acc, cur) => {
+            acc.curTime += cur.deltaTime;
+            const [note, velocity] = Array.isArray(cur.data)
+              ? cur.data
+              : [0, 0];
+            if (cur.type === 9 && velocity !== 0) {
+              acc.noteMap[note] = acc.curTime;
+              if (note > midiInfo.max) midiInfo.max = note;
+              if (note < midiInfo.min) midiInfo.min = note;
+            } else if (cur.type === 8 || velocity === 0) {
+              if (note in acc.noteMap && acc.noteMap[note] !== -1) {
+                acc.parsed.push({
+                  note: note,
+                  start: acc.noteMap[note],
+                  end: acc.curTime,
+                });
+              }
+              acc.noteMap[note] = -1;
             }
-            acc.noteMap[note] = -1;
-          }
-          return acc;
-        },
-        { noteMap: {}, curTime: 0, parsed: [] } as MidiData
-      )
-      .parsed.map((e) => {
-        e.start /= 440.3;
-        e.end /= 440.3;
-        return e;
-      });
+            return acc;
+          },
+          { noteMap: {}, curTime: 0, parsed: [] } as MidiData
+        )
+        .parsed.map((e) => {
+          e.start /= 440.3;
+          e.end /= 440.3;
+          return e;
+        });
+
+      return midiData;
+    });
 
     midiInfo.max += 1; // we need [min, max] so max should add 1 else we will get [min, max)
     midiInfo.avg = 150 / (midiInfo.max - midiInfo.min);
 
-    return {
-      midiData,
-      midiInfo,
-    };
+    return { midiInfo, data };
   };
 
   private prepareCanvas = () => {
@@ -148,62 +158,61 @@ export default class MidiCanvas {
   private drawFrame = ({
     ctx,
     audio,
-    midiInfo,
     midiData,
     width,
     height,
   }: {
     ctx: CanvasRenderingContext2D;
     audio: HTMLAudioElement;
-    midiInfo: ReturnType<
-      (typeof MidiCanvas)["prototype"]["prepareData"]
-    >["midiInfo"];
-    midiData: ReturnType<
-      (typeof MidiCanvas)["prototype"]["prepareData"]
-    >["midiData"];
+    midiData: ReturnType<(typeof MidiCanvas)["prototype"]["prepareData"]>;
     width: number;
     height: number;
   }) => {
+    const { midiInfo, data } = midiData;
     const { min, avg } = midiInfo;
     const baseHeight = height - avg;
 
     this.raf = requestAnimationFrame(() => {
       ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-      Object.entries(this.config.barStyle || {}).forEach(([key, value]) => {
-        // @ts-ignore
-        ctx[key] = value;
+      data.forEach((midi, index) => {
+        Object.entries(
+          this.config.midis[index].barStyle || defaultBarStyle
+        ).forEach(([key, value]) => {
+          // @ts-ignore
+          ctx[key] = value;
+        });
+
+        const { currentTime } = audio;
+        const inside = midi.filter(
+          (e) => e.end >= currentTime - 4000 && e.start <= currentTime + 4000
+        );
+        const highLight = inside.filter(
+          (e) => e.start <= currentTime && e.end >= currentTime
+        );
+
+        inside.forEach((e) => {
+          const x = (e.start - currentTime) * 50 + width / 2;
+          const y = baseHeight - (e.note - min) * avg;
+          const w = (e.end - e.start) * 50;
+          ctx.fillRect(x, y, w, avg);
+        });
+
+        Object.entries(
+          this.config.midis[index].activeStyle || defaultActiveStyle
+        ).forEach(([key, value]) => {
+          // @ts-ignore
+          ctx[key] = value;
+        });
+
+        highLight.forEach((e) => {
+          const x = (e.start - currentTime) * 50 + width / 2;
+          const y = baseHeight - (e.note - min) * avg;
+          const w = (e.end - e.start) * 50;
+          ctx.fillRect(x, y, w, avg);
+        });
       });
 
-      ctx.shadowBlur;
-
-      const { currentTime } = audio;
-      const inside = midiData.filter(
-        (e) => e.end >= currentTime - 4000 && e.start <= currentTime + 4000
-      );
-      const highLight = inside.filter(
-        (e) => e.start <= currentTime && e.end >= currentTime
-      );
-
-      inside.forEach((e) => {
-        const x = (e.start - currentTime) * 50 + width / 2;
-        const y = baseHeight - (e.note - min) * avg;
-        const w = (e.end - e.start) * 50;
-        ctx.fillRect(x, y, w, avg);
-      });
-
-      Object.entries(this.config.activeStyle || {}).forEach(([key, value]) => {
-        // @ts-ignore
-        ctx[key] = value;
-      });
-
-      highLight.forEach((e) => {
-        const x = (e.start - currentTime) * 50 + width / 2;
-        const y = baseHeight - (e.note - min) * avg;
-        const w = (e.end - e.start) * 50;
-        ctx.fillRect(x, y, w, avg);
-      });
-
-      this.drawFrame({ ctx, audio, midiInfo, midiData, width, height });
+      this.drawFrame({ ctx, audio, midiData, width, height });
     });
   };
 
@@ -212,7 +221,7 @@ export default class MidiCanvas {
       return this.audio;
     }
     const { audio } = this.prepareAudio();
-    const { midiInfo, midiData } = this.prepareData();
+    const midiData = this.prepareData();
     const { ctx, rect } = this.prepareCanvas();
 
     audio.addEventListener("timeupdate", () => {
@@ -220,7 +229,6 @@ export default class MidiCanvas {
         this.drawFrame({
           ctx,
           audio,
-          midiInfo,
           midiData,
           width: rect.width,
           height: rect.height,
@@ -233,7 +241,6 @@ export default class MidiCanvas {
         this.drawFrame({
           ctx,
           audio,
-          midiInfo,
           midiData,
           width: rect.width,
           height: rect.height,

@@ -10,7 +10,7 @@ npm i --save midi-canvas
 
 ```javascript
 midi.current = new MidiCanvas({
-  midi: "base64",
+  midis: [{ src: "base64" }],
   audio: "url",
   width: "100%",
   height: 150,
