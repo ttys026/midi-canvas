@@ -46,6 +46,7 @@ const defaultActiveStyle = {
 export default class MidiCanvas {
   private raf = 0;
   private ready = false;
+  public refresh = () => {};
   public config: Params = {
     audio: "",
     container: document.body,
@@ -226,7 +227,11 @@ export default class MidiCanvas {
         });
       });
 
-      this.drawFrame({ ctx, audio, midiData, width, height });
+      if (this.audio.paused) {
+        cancelAnimationFrame(this.raf);
+      } else {
+        this.drawFrame({ ctx, audio, midiData, width, height });
+      }
     });
   };
 
@@ -251,7 +256,20 @@ export default class MidiCanvas {
     });
     audio.addEventListener("play", () => {
       cancelAnimationFrame(this.raf);
-      this.raf = requestAnimationFrame(() => {
+      this.drawFrame({
+        ctx,
+        audio,
+        midiData,
+        width: rect.width,
+        height: rect.height,
+      });
+    });
+    audio.addEventListener("pause", () => {
+      cancelAnimationFrame(this.raf);
+    });
+
+    this.refresh = () => {
+      if (this.audio.paused) {
         this.drawFrame({
           ctx,
           audio,
@@ -259,20 +277,10 @@ export default class MidiCanvas {
           width: rect.width,
           height: rect.height,
         });
-      });
-    });
-    audio.addEventListener("pause", () => {
-      cancelAnimationFrame(this.raf);
-    });
+      }
+    };
 
-    this.drawFrame({
-      ctx,
-      audio,
-      midiData,
-      width: rect.width,
-      height: rect.height,
-    });
-
+    this.refresh();
     this.ready = true;
 
     return audio;
