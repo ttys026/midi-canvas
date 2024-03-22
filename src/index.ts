@@ -9,6 +9,9 @@ export interface MidiConfig {
   src: string;
   barStyle?: Partial<BarStyle>;
   activeStyle?: Partial<BarStyle>;
+  visible?: boolean;
+  noteShift?: number;
+  timeShift?: number;
 }
 
 export interface Params {
@@ -43,7 +46,7 @@ const defaultActiveStyle = {
 export default class MidiCanvas {
   private raf = 0;
   private ready = false;
-  private config: Params = {
+  public config: Params = {
     audio: "",
     container: document.body,
     width: 400,
@@ -63,7 +66,7 @@ export default class MidiCanvas {
   private prepareData = () => {
     const midiInfo = { max: -1, min: 255, avg: 0 };
 
-    const data = this.config.midis.map((midi) => {
+    const data = this.config.midis.map((midi, index) => {
       const raw = parse(midi.src);
       const longest = raw.track.reduce((acc, ele) => {
         return acc.event.length > ele.event.length ? acc : ele;
@@ -75,9 +78,13 @@ export default class MidiCanvas {
         .reduce(
           (acc, cur) => {
             acc.curTime += cur.deltaTime;
-            const [note, velocity] = Array.isArray(cur.data)
+            const [originalNote, velocity] = Array.isArray(cur.data)
               ? cur.data
               : [0, 0];
+
+            const note =
+              originalNote + (this.config.midis?.[index]?.noteShift || 0);
+
             if (cur.type === 9 && velocity !== 0) {
               acc.noteMap[note] = acc.curTime;
               if (note > midiInfo.max) midiInfo.max = note;
@@ -94,7 +101,11 @@ export default class MidiCanvas {
             }
             return acc;
           },
-          { noteMap: {}, curTime: 0, parsed: [] } as MidiData
+          {
+            noteMap: {},
+            curTime: 0 + (this.config.midis?.[index]?.timeShift || 0),
+            parsed: [],
+          } as MidiData
         )
         .parsed.map((e) => {
           e.start /= 440.3;
@@ -175,6 +186,9 @@ export default class MidiCanvas {
     this.raf = requestAnimationFrame(() => {
       ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
       data.forEach((midi, index) => {
+        if (this.config.midis[index].visible === false) {
+          return;
+        }
         Object.entries(
           this.config.midis[index].barStyle || defaultBarStyle
         ).forEach(([key, value]) => {
@@ -249,6 +263,14 @@ export default class MidiCanvas {
     });
     audio.addEventListener("pause", () => {
       cancelAnimationFrame(this.raf);
+    });
+
+    this.drawFrame({
+      ctx,
+      audio,
+      midiData,
+      width: rect.width,
+      height: rect.height,
     });
 
     this.ready = true;
