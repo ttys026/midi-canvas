@@ -1,8 +1,20 @@
 import MidiParser from "midi-parser-js";
+import {
+  MidiData,
+  MidiEvent,
+  MidiParseResult,
+  ParseData,
+} from "./typings/internal";
 
 export interface BarStyle extends CanvasShadowStyles {
   fillStyle: string | CanvasGradient | CanvasPattern;
   strokeStyle: string | CanvasGradient | CanvasPattern;
+}
+
+export interface MidiInfo {
+  max: number;
+  min: number;
+  avg: number;
 }
 
 export interface MidiConfig {
@@ -10,8 +22,8 @@ export interface MidiConfig {
   barStyle?: Partial<BarStyle>;
   activeStyle?: Partial<BarStyle>;
   visible?: boolean;
-  noteShift?: number;
-  timeShift?: number;
+  // noteShift?: number;
+  // timeShift?: number;
 }
 
 export interface Params {
@@ -20,6 +32,7 @@ export interface Params {
   width: number | string;
   height: number | string;
   midis: MidiConfig[];
+  shift?: (data: ParseData[][]) => ParseData[][];
 }
 
 const normalize = (base64: string) => {
@@ -65,9 +78,7 @@ export default class MidiCanvas {
   }
 
   private prepareData = () => {
-    const midiInfo = { max: -1, min: 255, avg: 0 };
-
-    const data = this.config.midis.map((midi, index) => {
+    let data = this.config.midis.map((midi, index) => {
       const raw = parse(midi.src);
       const longest = raw.track.reduce((acc, ele) => {
         return acc.event.length > ele.event.length ? acc : ele;
@@ -79,17 +90,12 @@ export default class MidiCanvas {
         .reduce(
           (acc, cur) => {
             acc.curTime += cur.deltaTime;
-            const [originalNote, velocity] = Array.isArray(cur.data)
+            const [note, velocity] = Array.isArray(cur.data)
               ? cur.data
               : [0, 0];
 
-            const note =
-              originalNote + (this.config.midis?.[index]?.noteShift || 0);
-
             if (cur.type === 9 && velocity !== 0) {
               acc.noteMap[note] = acc.curTime;
-              if (note > midiInfo.max) midiInfo.max = note;
-              if (note < midiInfo.min) midiInfo.min = note;
             } else if (cur.type === 8 || velocity === 0) {
               if (note in acc.noteMap && acc.noteMap[note] !== -1) {
                 acc.parsed.push({
@@ -104,7 +110,7 @@ export default class MidiCanvas {
           },
           {
             noteMap: {},
-            curTime: 0 + (this.config.midis?.[index]?.timeShift || 0),
+            curTime: 0,
             parsed: [],
           } as MidiData
         )
@@ -117,10 +123,28 @@ export default class MidiCanvas {
       return midiData;
     });
 
+    const midiInfo = { max: -1, min: 255, avg: 0 };
+
+    if (this.config.shift) {
+      try {
+        data = this.config.shift(data);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    data.forEach((track) => {
+      track.forEach((midiData) => {
+        const { note } = midiData;
+        if (note > midiInfo.max) midiInfo.max = note;
+        if (note < midiInfo.min) midiInfo.min = note;
+      });
+    });
+
     midiInfo.max += 1; // we need [min, max] so max should add 1 else we will get [min, max)
     midiInfo.avg = 150 / (midiInfo.max - midiInfo.min);
 
-    return { midiInfo, data };
+    return { info: midiInfo, data };
   };
 
   private prepareCanvas = () => {
@@ -176,12 +200,12 @@ export default class MidiCanvas {
   }: {
     ctx: CanvasRenderingContext2D;
     audio: HTMLAudioElement;
-    midiData: ReturnType<(typeof MidiCanvas)["prototype"]["prepareData"]>;
+    midiData: ReturnType<InstanceType<typeof MidiCanvas>["prepareData"]>;
     width: number;
     height: number;
   }) => {
-    const { midiInfo, data } = midiData;
-    const { min, avg } = midiInfo;
+    const { info, data } = midiData;
+    const { min, avg } = info;
     const baseHeight = height - avg;
 
     this.raf = requestAnimationFrame(() => {
