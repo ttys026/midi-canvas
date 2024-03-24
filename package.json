@@ -1,6 +1,6 @@
 {
   "name": "midi-canvas",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "scripts": {
     "build": "rimraf dist && vite build --outDir dist",
     "test": "jest"
