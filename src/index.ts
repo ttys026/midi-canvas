@@ -68,6 +68,7 @@ export default class MidiCanvas {
     midis: [],
   };
   public audio = new Audio();
+  private canvas: HTMLCanvasElement = document.createElement("canvas");
 
   constructor(params: Params) {
     this.config = {
@@ -148,8 +149,8 @@ export default class MidiCanvas {
   };
 
   private prepareCanvas = () => {
-    const { container, width, height } = this.config;
-    const canvas = document.createElement("canvas");
+    const { canvas, config } = this;
+    const { container, width, height } = config;
     if (width && Number.isFinite(width)) {
       canvas.style.width = `${width}px`;
     } else if (width) {
@@ -308,5 +309,15 @@ export default class MidiCanvas {
     this.ready = true;
 
     return audio;
+  };
+
+  public destroy = () => {
+    this.ready = false;
+    cancelAnimationFrame(this.raf);
+    this.audio.pause();
+    this.audio = new Audio();
+    this.canvas.remove();
+    this.canvas = document.createElement("canvas");
+    this.refresh = () => {};
   };
 }
