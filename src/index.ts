@@ -14,7 +14,6 @@ export interface BarStyle extends CanvasShadowStyles {
 export interface MidiInfo {
   max: number;
   min: number;
-  avg: number;
 }
 
 export interface MidiConfig {
@@ -22,8 +21,6 @@ export interface MidiConfig {
   barStyle?: Partial<BarStyle>;
   activeStyle?: Partial<BarStyle>;
   visible?: boolean;
-  // noteShift?: number;
-  // timeShift?: number;
 }
 
 export interface Params {
@@ -31,6 +28,7 @@ export interface Params {
   container: HTMLElement;
   width: number | string;
   height: number | string;
+  paddingVertical?: number;
   midis: MidiConfig[];
   shift?: (data: ParseData[][]) => ParseData[][];
 }
@@ -65,6 +63,7 @@ export default class MidiCanvas {
     container: document.body,
     width: 400,
     height: 200,
+    paddingVertical: 4,
     midis: [],
   };
   public audio = new Audio();
@@ -79,7 +78,7 @@ export default class MidiCanvas {
   }
 
   private prepareData = () => {
-    let data = this.config.midis.map((midi, index) => {
+    let data = this.config.midis.map((midi) => {
       const raw = parse(midi.src);
       const longest = raw.track.reduce((acc, ele) => {
         return acc.event.length > ele.event.length ? acc : ele;
@@ -116,6 +115,7 @@ export default class MidiCanvas {
           } as MidiData
         )
         .parsed.map((e) => {
+          // 440hz plus one cent is 440.3hz
           e.start /= 440.3;
           e.end /= 440.3;
           return e;
@@ -124,7 +124,7 @@ export default class MidiCanvas {
       return midiData;
     });
 
-    const midiInfo = { max: -1, min: 255, avg: 0 };
+    const midiInfo = { max: -1, min: 255 };
 
     if (this.config.shift) {
       try {
@@ -143,7 +143,6 @@ export default class MidiCanvas {
     });
 
     midiInfo.max += 1; // we need [min, max] so max should add 1 else we will get [min, max)
-    midiInfo.avg = 150 / (midiInfo.max - midiInfo.min);
 
     return { info: midiInfo, data };
   };
@@ -205,8 +204,13 @@ export default class MidiCanvas {
     width: number;
     height: number;
   }) => {
+    const verticalPaddingRatio = Math.max(
+      1 - ((this.config.paddingVertical ?? 4) * 2) / height,
+      0.8
+    );
     const { info, data } = midiData;
-    const { min, avg } = info;
+    const { min, max } = info;
+    const avg = (height / (max - min)) * verticalPaddingRatio;
     const baseHeight = height - avg;
 
     this.raf = requestAnimationFrame(() => {
@@ -234,7 +238,7 @@ export default class MidiCanvas {
           const x = (e.start - currentTime) * 50 + width / 2;
           const y = baseHeight - (e.note - min) * avg;
           const w = (e.end - e.start) * 50;
-          ctx.fillRect(x, y, w, avg);
+          ctx.fillRect(x, y * verticalPaddingRatio, w, avg);
         });
 
         Object.entries(
@@ -248,7 +252,7 @@ export default class MidiCanvas {
           const x = (e.start - currentTime) * 50 + width / 2;
           const y = baseHeight - (e.note - min) * avg;
           const w = (e.end - e.start) * 50;
-          ctx.fillRect(x, y, w, avg);
+          ctx.fillRect(x, y * verticalPaddingRatio, w, avg);
         });
       });
 
