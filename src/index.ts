@@ -117,8 +117,8 @@ export default class MidiCanvas {
           } as MidiData
         )
         .parsed.map((e) => {
-          e.start /= tempo;
-          e.end /= tempo;
+          e.start /= tempo * 2;
+          e.end /= tempo * 2;
           return e;
         });
 
