@@ -18,6 +18,7 @@ export interface MidiInfo {
 
 export interface MidiConfig {
   src: string;
+  tempo?: number;
   barStyle?: Partial<BarStyle>;
   activeStyle?: Partial<BarStyle>;
   visible?: boolean;
@@ -79,7 +80,8 @@ export default class MidiCanvas {
 
   private prepareData = () => {
     let data = this.config.midis.map((midi) => {
-      const raw = parse(midi.src);
+      const { src, tempo = 120 } = midi;
+      const raw = parse(src);
       const longest = raw.track.reduce((acc, ele) => {
         return acc.event.length > ele.event.length ? acc : ele;
       }, raw.track[0]);
@@ -115,9 +117,8 @@ export default class MidiCanvas {
           } as MidiData
         )
         .parsed.map((e) => {
-          // 440hz plus one cent is 440.3hz
-          e.start /= 440.3;
-          e.end /= 440.3;
+          e.start /= tempo;
+          e.end /= tempo;
           return e;
         });
 
@@ -273,15 +274,7 @@ export default class MidiCanvas {
     const { ctx, rect } = this.prepareCanvas();
 
     audio.addEventListener("timeupdate", () => {
-      if (audio.paused) {
-        this.drawFrame({
-          ctx,
-          audio,
-          midiData,
-          width: rect.width,
-          height: rect.height,
-        });
-      }
+      this.refresh();
     });
     audio.addEventListener("play", () => {
       cancelAnimationFrame(this.raf);
