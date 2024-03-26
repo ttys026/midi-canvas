@@ -18,7 +18,6 @@ export interface MidiInfo {
 
 export interface MidiConfig {
   src: string;
-  tempo?: number;
   barStyle?: Partial<BarStyle>;
   activeStyle?: Partial<BarStyle>;
   visible?: boolean;
@@ -80,7 +79,7 @@ export default class MidiCanvas {
 
   private prepareData = () => {
     let data = this.config.midis.map((midi) => {
-      const { src, tempo = 120 } = midi;
+      const { src } = midi;
       const raw = parse(src);
       const longest = raw.track.reduce((acc, ele) => {
         return acc.event.length > ele.event.length ? acc : ele;
@@ -117,8 +116,8 @@ export default class MidiCanvas {
           } as MidiData
         )
         .parsed.map((e) => {
-          e.start /= tempo * 2;
-          e.end /= tempo * 2;
+          e.start /= raw.timeDivision * 2;
+          e.end /= raw.timeDivision * 2;
           return e;
         });
 
